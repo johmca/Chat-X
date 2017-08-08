@@ -43,9 +43,10 @@ var conversation = new Conversation({
   version_date: Conversation.VERSION_DATE_2017_04_21
 });
 
+
 // Listen for POST messages coming from the clients at API Endpoint = /api/message
 app.post('/api/message', function(req, res) {
-console.log(`Context object just as it is received from POST = ${JSON.stringify(req.body.context, null, 2)}`);
+
   //If the.env file has not been updated correctly then return errors
   //You need to update the placeholders with the workspace id from your workspace and
   //the user id and password from your intsance of the Conversation service
@@ -76,116 +77,65 @@ console.log(`Context object just as it is received from POST = ${JSON.stringify(
   }
 
   //Determine client type from message received on POST
-  //var clientType = req.body.context.clientType;
+  var clientType = req.body.context.clientType;
 
-  // //*********************************************************************
-  // //If no user utterance e.g. first round then call conversation without calling
-  // //Tone Analyser
-  // //***********************************************************************
-  // if (!req.body.input) {
-  //   //Construct payload object with workspace id, conversation context (received
-  //   // in POST body and updated with tone analysis) and user's latest input (received in POST body)
-  //   console.log('No input...call Conversation on its own');
-  //   var payload = {
-  //     workspace_id: workspace,
-  //     context: {},
-  //     input: {}
-  //   };
-  //   console.log(`Calling Conversation on its own with payload=${JSON.stringify(payload, null, 2)}`);
-  //   // Send the payload to the conversation service and return the message
-  //   // back to the client after checking confidence of the response (if
-  //   // confidence is too low we send another message asking the user
-  //   // to clarify)
-  //   conversation.message(payload, function(err, data) {
-  //     if (err) {
-  //       console.log(`Return from first call to Conversation with error = ${JSON.stringify(err, null, 2)}`);
-  //       return res.status(err.code || 590).json(err);
-  //     }
-  //     //Return response to client
-  //     console.log(`Return from first call to Conversation with data = ${JSON.stringify(data, null, 2)}`);
-  //     return res.json(updateMessage(payload, data));
-  //   });
-  // }
-//*********************************************************************
-//If we reach here then we have a user input ad we will invoke TA and
-// then invoke Conversatio from within the TA callback
+  //***********************
+  //Pass the user utterance into the Tone Analyser service
+  //************************
 
-//Construct input parameter for TA from user utterance
-  //console.log('User utterance ='+ req.body.input.text);
-  if (!req.body.input) {
-    console.log('req.body.input is blank');
-    req.body.input = {
-      "text":"Hi"
-    };
-    req.body.context = {
-      "dominantTone":{
-        "score": 1,
-        "tone_id": "not set",
-        "tone_name": "not set"
-      }
-    };
-  }
+  //Invoke Tone Analyser but only if there is a user utterance to analyse
+  //
   if (req.body.input.text) {
-    //console.log('User utterance ='+ req.body.input.text);
+    console.log('User utterance ='+ req.body.input.text);
     var userUtterance = {
       "utterances": [
-        {
+      {
         "text": req.body.input.text,
         "user": "customer"
-        }
-      ]
-    }
-  console.log(`Context object from PREVIOUS conversation not yet including LATEST Tones = ${JSON.stringify(req.body.context, null, 2)}`);
-  toneAnalyzer.tone_chat(userUtterance, (err, response) => {
-    if (err) {
-      //return next(err); //what does next() do in original code?
-      console.log(`Call to Tone Analyser failed with error ${err}`)
-      return(err);
       }
-      console.log(`Response from TA = ${JSON.stringify(response, null, 2)}`);
-      var dominantTone = response.utterances_tone[0].tones[0];
-      //console.log(`Dominant tone is ${dominantTone}`);
-      //Insert dominant tone returned from the TA service into the context object
-      req.body.context.dominantTone=dominantTone;
-      console.log(`Context object from PREVIOUS conversation round now updated to inlcude Tone of user's latest utterance = ${JSON.stringify(req.body.context, null, 2)}`);
-
-      //***********************
-      //Invoke the Conversation service within callback from TA service
-      //to keep synchronised - passing in the dominant Tone of users latest
-      //utterance
-      //
-      //(re-write with promisses if you get time)
-      //************************
-
-      //Construct payload object with workspace id, conversation context (received
-      // in POST body and updated with tone analysis) and user's latest input (received in POST body)
-      var payload = {
-        workspace_id: workspace,
-        context: req.body.context || {},
-        input: req.body.input || {}
-      };
-
-      // Send the payload to the conversation service and return the message
-      // back to the client after checking confidence of the response (if
-      // confidence is too low we send another message asking the user
-      // to clarify)
-      conversation.message(payload, function(err, data) {
-        if (err) {
-          return res.status(err.code || 500).json(err);
-        }
-        //Return response to client
-        console.log(`Context object from LATEST conversation round = ${JSON.stringify(data, null, 2)}`);
-        return res.json(updateMessage(payload, data));
-      //END OF CALL TO CONVERSATION
-      });
-
-  //end of call to TA
-    });
+    ]
   }
-//END OF
+  toneAnalyzer.tone_chat(userUtterance, (err, response) => {
+  if (err) {
+    //return next(err); //what does next() do in original code?
+    console.log(`Tone Analyser failed with error ${err}`)
+    return(err);
+    }
+    console.log(JSON.stringify(response, null, 2));
+    //return res.json(response);
+
+
+
+
+  });
+}
+console.log('Finished calling TA ..next call Conversation...');
+
+
+  //***********************
+  //Invoke the Conversation service
+  //************************
+
+  //Construct payload object with workspace id, conversation context (received
+  // in POST body and updated with tone analysis) and user's latest input (received in POST body)
+  var payload = {
+    workspace_id: workspace,
+    context: req.body.context || {},
+    input: req.body.input || {}
+  };
+
+  // Send the payload to the conversation service and return the message
+  // back to the client after checking confidence of the response (if
+  // confidence is too low we send another message asking the user
+  // to clarify)
+  conversation.message(payload, function(err, data) {
+    if (err) {
+      return res.status(err.code || 500).json(err);
+    }
+    //Return response to client
+    return res.json(updateMessage(payload, data));
+  });
 });
-
-
 
 /******************************************************************
 /* Function : updateMessage
@@ -221,12 +171,20 @@ function updateMessage(input, response) {
     // The confidence will vary depending on how well the system is trained. The service will always try to assign
     // a class/intent to the input. If the confidence is low, then it suggests the service is unsure of the
     // user's intent . In these cases it is usually best to return a disambiguation message
+    // ('I did not understand your intent, please rephrase your question', etc..)
+    // if (intent.confidence >= 0.75) {
+    //   additionalText = 'I understood your intent was ' + intent.intent + 'with confidence of' + intent.confidence;
+    // } else if (intent.confidence >= 0.5 ) {
+    //   additionalText = 'I think your intent was ' + intent.intent + 'with confidence of '+ intent.confidence;
+    // } else {
+    //   additionalText = 'I think your intent was '+intent.intent +' but my confidence is low at '+ intent.confidence + '. I\'m still learning so please be patient with me. Can you please rephrase and ask me again.';
+    // }
 
-      if (intent.confidence <= confidenceThreshold) {
+      if (intent.confidence <= 0.6) {
           additionalText = 'I think your intent was '+intent.intent +' but my confidence is low at '+ intent.confidence + '. I\'m still learning so please be patient with me. Can you please rephrase and ask me again.';
           textFromConversation='';
       }
-      
+
   }
   response.output.text = additionalText+textFromConversation;
   return response;

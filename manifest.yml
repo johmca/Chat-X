@@ -4,12 +4,12 @@ declared-services:
     label: conversation
     plan: free
 applications:
-- name: JohnMcAvenue-cvbot
+- name: ICAEW-chatplatform-v0.1
   command: npm start
   path: .
   memory: 256M
   instances: 1
   services:
-  - Conversation-pf-tjbot
+  - Conversation-ICAEW-1
   env:
     NPM_CONFIG_PRODUCTION: false
