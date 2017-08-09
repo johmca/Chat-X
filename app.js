@@ -29,6 +29,10 @@ app.use(express.static('./public')); // load UI from public folder
 app.use(bodyParser.json());
 
 // Create the service wrapper for Tone Analyser
+// If unspecified here, the TONE_ANALYZER_USERNAME and TONE_ANALYZER__PASSWORD env properties
+// will be checked. After that, the SDK will fall back to the bluemix-provided VCAP_SERVICES
+// environment property i.e. if tunning locally it will use credentials from the .env file
+// but if running in Bluemix it will use those provided by Bluemix
 const toneAnalyzer = new ToneAnalyzerV3({
   version_date: '2016-05-19',
 });
@@ -43,9 +47,13 @@ var conversation = new Conversation({
   version_date: Conversation.VERSION_DATE_2017_04_21
 });
 
+//*********************** API ENDPOINT for POST **********************************************
 // Listen for POST messages coming from the clients at API Endpoint = /api/message
+//********************************************************************************************
 app.post('/api/message', function(req, res) {
-console.log(`Context object just as it is received from POST = ${JSON.stringify(req.body.context, null, 2)}`);
+
+//console.log(`Context object just as it is received from POST = ${JSON.stringify(req.body.context, null, 2)}`);
+
   //If the.env file has not been updated correctly then return errors
   //You need to update the placeholders with the workspace id from your workspace and
   //the user id and password from your intsance of the Conversation service
@@ -78,40 +86,15 @@ console.log(`Context object just as it is received from POST = ${JSON.stringify(
   //Determine client type from message received on POST
   //var clientType = req.body.context.clientType;
 
-  // //*********************************************************************
-  // //If no user utterance e.g. first round then call conversation without calling
-  // //Tone Analyser
-  // //***********************************************************************
-  // if (!req.body.input) {
-  //   //Construct payload object with workspace id, conversation context (received
-  //   // in POST body and updated with tone analysis) and user's latest input (received in POST body)
-  //   console.log('No input...call Conversation on its own');
-  //   var payload = {
-  //     workspace_id: workspace,
-  //     context: {},
-  //     input: {}
-  //   };
-  //   console.log(`Calling Conversation on its own with payload=${JSON.stringify(payload, null, 2)}`);
-  //   // Send the payload to the conversation service and return the message
-  //   // back to the client after checking confidence of the response (if
-  //   // confidence is too low we send another message asking the user
-  //   // to clarify)
-  //   conversation.message(payload, function(err, data) {
-  //     if (err) {
-  //       console.log(`Return from first call to Conversation with error = ${JSON.stringify(err, null, 2)}`);
-  //       return res.status(err.code || 590).json(err);
-  //     }
-  //     //Return response to client
-  //     console.log(`Return from first call to Conversation with data = ${JSON.stringify(data, null, 2)}`);
-  //     return res.json(updateMessage(payload, data));
-  //   });
-  // }
-//*********************************************************************
-//If we reach here then we have a user input ad we will invoke TA and
-// then invoke Conversatio from within the TA callback
 
-//Construct input parameter for TA from user utterance
-  //console.log('User utterance ='+ req.body.input.text);
+//*********************************************************************
+//Pass the user utterance through the Tone Analyser service and append
+//the dominant tone that is returned into the Conversation context object
+//************************************************************************
+
+//If the user utterance does not exist (first round of conversation) then
+//force it to be a greeting to get it through TA as it will not handle an
+//empty input
   if (!req.body.input) {
     console.log('req.body.input is blank');
     req.body.input = {
@@ -119,14 +102,16 @@ console.log(`Context object just as it is received from POST = ${JSON.stringify(
     };
     req.body.context = {
       "dominantTone":{
-        "score": 1,
-        "tone_id": "not set",
-        "tone_name": "not set"
+        "score": 0.0,
+        "tone_id": "",
+        "tone_name": ""
       }
     };
   }
+
   if (req.body.input.text) {
     //console.log('User utterance ='+ req.body.input.text);
+    //Construct input parameter for call to TA service
     var userUtterance = {
       "utterances": [
         {
@@ -135,30 +120,46 @@ console.log(`Context object just as it is received from POST = ${JSON.stringify(
         }
       ]
     }
-  console.log(`Context object from PREVIOUS conversation not yet including LATEST Tones = ${JSON.stringify(req.body.context, null, 2)}`);
+  //console.log(`Context object from PREVIOUS conversation not yet including LATEST Tones = ${JSON.stringify(req.body.context, null, 2)}`);
+  //Call the TA service passing user utterance object and callback function
   toneAnalyzer.tone_chat(userUtterance, (err, response) => {
     if (err) {
       //return next(err); //what does next() do in original code?
-      console.log(`Call to Tone Analyser failed with error ${err}`)
+      //console.log(`Call to Tone Analyser failed with error ${err}`)
       return(err);
       }
-      console.log(`Response from TA = ${JSON.stringify(response, null, 2)}`);
-      var dominantTone = response.utterances_tone[0].tones[0];
-      //console.log(`Dominant tone is ${dominantTone}`);
-      //Insert dominant tone returned from the TA service into the context object
+      //console.log(`Response from TA = ${JSON.stringify(response, null, 2)}`);
+
+      //Loop round array of tones returned selecting the one with highest score
+      //as the dominant tone
+      var maxScore = 0.0;
+      var dominantTone = {
+        "score":0,
+        "tone_id":null,
+        "tone_name":null
+      };
+      response.utterances_tone[0].tones.forEach(function(tone) {
+        //console.log(`Tone info1 = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
+        if (tone.score > maxScore) {
+          dominantTone = tone;
+          //console.log(`New domimant tone ${JSON.stringify(tone, null, 2)}`);
+        }
+      });
+
+      //Insert dominant tone into the conversation context object
       req.body.context.dominantTone=dominantTone;
-      console.log(`Context object from PREVIOUS conversation round now updated to inlcude Tone of user's latest utterance = ${JSON.stringify(req.body.context, null, 2)}`);
+
+      //console.log(`Context object from PREVIOUS conversation round now updated to inlcude Tone of user's latest utterance = ${JSON.stringify(req.body.context, null, 2)}`);
 
       //***********************
       //Invoke the Conversation service within callback from TA service
       //to keep synchronised - passing in the dominant Tone of users latest
-      //utterance
-      //
-      //(re-write with promisses if you get time)
+      //utterance ithin the context object
+      //(re-write this with promisses if you get time)
       //************************
 
       //Construct payload object with workspace id, conversation context (received
-      // in POST body and updated with tone analysis) and user's latest input (received in POST body)
+      // in POST body and updated with tone) and user's latest input (received in POST body)
       var payload = {
         workspace_id: workspace,
         context: req.body.context || {},
@@ -167,25 +168,93 @@ console.log(`Context object just as it is received from POST = ${JSON.stringify(
 
       // Send the payload to the conversation service and return the message
       // back to the client after checking confidence of the response (if
-      // confidence is too low we send another message asking the user
-      // to clarify)
+      // confidence is too low we replace the response from Conversation with
+      // another message asking the user to clarify)
       conversation.message(payload, function(err, data) {
         if (err) {
           return res.status(err.code || 500).json(err);
         }
-        //Return response to client
-        console.log(`Context object from LATEST conversation round = ${JSON.stringify(data, null, 2)}`);
+
+        //console.log(`Context object from LATEST conversation round = ${JSON.stringify(data, null, 2)}`);
+
+      //Record user feedback to database
+        recordFeedback(data);
+
+      //Return response to client (also update message if low on confidence)
         return res.json(updateMessage(payload, data));
+
       //END OF CALL TO CONVERSATION
       });
 
   //end of call to TA
     });
   }
-//END OF
+//END OF P
 });
 
+/*******************************************************************
+/* Function : recordFeedback
+/******************************************************************
+This function willcheck for user feedback and if found will record
+this in the database
 
+Updates the response text using the intent confidence
+  @param  {Object} response The response from the Conversation service
+  @return none
+ ********************************************************************/
+
+function recordFeedback(response) {
+  // console.log(`Running recordFeedback().....`);
+  // console.log(`Printing context ${JSON.stringify(response.context, null, 2)}`);
+  if (response.context.feedbackText!='none' && response.context.userEmail!='none' ) {
+
+  //Send feedback to TA service to understand tone
+    var userUtterance = {
+      "utterances": [
+        {
+        "text": response.context.feedbackText,
+        "user": "customer"
+        }
+      ]
+    }
+
+  //Call the TA service passing user utterance object and callback function
+  // toneAnalyzer.tone_chat(userUtterance, (err, response) => {
+  //   if (err) {
+  //     console.log(`Call to Tone Analyser failed with error ${err}`)
+  //     return(err);
+  //     }
+  //
+  //     //Loop round array of tones returned selecting the one with highest score
+  //     //as the dominant tone
+  //     var maxScore = 0.0;
+  //     var dominantTone = {
+  //       "score":0,
+  //       "tone_id":null,
+  //       "tone_name":null
+  //     };
+  //     response.utterances_tone[0].tones.forEach(function(tone) {
+  //       //console.log(`Tone info1 = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
+  //       if (tone.score > maxScore) {
+  //         dominantTone = tone;
+  //       }
+  //     });
+  //     return dominantTone
+  //   });
+
+
+
+    console.log('Saving feedback to database...');
+    console.log(`User feedback = ${response.context.feedbackText}`);
+    console.log(`User feedback email = ${response.context.userEmail}`);
+    //console.log(`Tone of feedback=${JSON.stringify(dominantTone, null, 2)}`);
+
+    //Reset context variables
+    response.context.feedbackText ="none";
+    response.context.userEmail ="none";
+  }
+  return;
+}
 
 /******************************************************************
 /* Function : updateMessage
@@ -200,6 +269,17 @@ Updates the response text using the intent confidence
  ********************************************************************/
 
 function updateMessage(input, response) {
+
+  //Demo feature -
+  //    One caveat is that if the user expresses a negative emotion then we may not map this
+  //    to an intent so confidence may be low but we do want to show the conversation node
+  //    handling negative emotions. Do not override the message if we have arrived at the
+  //    Negative Emotion node. Simply return the unchanged response.
+  if (response.output.nodes_visited[0]=='Negative Emotion') {
+    //console.log('Negative emotion encountered');
+    return response;
+  }
+
   //Retrieve confidence threshold from environment file - use 0.5 if not defined
   var confidenceThreshold = process.env.CONFIDENCE_THRESHOLD|| 0.5;
   if (confidenceThreshold == '<confidence-threshold>') {
@@ -220,13 +300,11 @@ function updateMessage(input, response) {
     // Depending on the confidence of the response the app can return different messages.
     // The confidence will vary depending on how well the system is trained. The service will always try to assign
     // a class/intent to the input. If the confidence is low, then it suggests the service is unsure of the
-    // user's intent . In these cases it is usually best to return a disambiguation message
-
+    // user's intent . In these cases it is usually best to return a disambiguation message.
       if (intent.confidence <= confidenceThreshold) {
           additionalText = 'I think your intent was '+intent.intent +' but my confidence is low at '+ intent.confidence + '. I\'m still learning so please be patient with me. Can you please rephrase and ask me again.';
           textFromConversation='';
       }
-      
   }
   response.output.text = additionalText+textFromConversation;
   return response;
