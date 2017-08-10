@@ -134,7 +134,7 @@ app.post('/api/message', function(req, res) {
       //console.log(`Call to Tone Analyser failed with error ${err}`)
       return(err);
       }
-      console.log(`Response from TA = ${JSON.stringify(response, null, 2)}`);
+      //console.log(`Response from TA = ${JSON.stringify(response, null, 2)}`);
 
       //Loop round array of tones returned selecting the one with highest score
       //as the dominant tone
@@ -153,9 +153,7 @@ app.post('/api/message', function(req, res) {
       });
 
       //Insert dominant tone into the conversation context object
-      if (dominantTone) {
-        req.body.context.dominantTone=dominantTone;
-      }
+      req.body.context.dominantTone=dominantTone;
 
       //console.log(`Context object from PREVIOUS conversation round now updated to inlcude Tone of user's latest utterance = ${JSON.stringify(req.body.context, null, 2)}`);
 
@@ -203,9 +201,8 @@ app.post('/api/message', function(req, res) {
 /*******************************************************************
 /* Function : recordFeedback
 /******************************************************************
-This function will check for user feedback and if found will send it to
-the tone analyser and then write the feedback (including tone) to a
-database.
+This function willcheck for user feedback and if found will record
+this in the database
 
 Updates the response text using the intent confidence
   @param  {Object} response The response from the Conversation service
@@ -213,64 +210,54 @@ Updates the response text using the intent confidence
  ********************************************************************/
 
 function recordFeedback(response) {
-
-  //If feedback has been collected then analyse its tone and write to the database
-  //if (response.context.feedbackText!='none' && response.context.userEmail!='none' ) {
-  if (response.context.feedback=='2') {
-  console.log('Feedback = 2..analysing tone...');
-
-  //Take a copy of feedback text and email from response.cntext as will be overwritten by
-  //call to TA later
-  var feedbackText = response.context.feedbackText;
-  var userEmail = "none";
-  userEmail = response.context.userEmail;
+  // console.log(`Running recordFeedback().....`);
+  // console.log(`Printing context ${JSON.stringify(response.context, null, 2)}`);
+  if (response.context.feedbackText!='none' && response.context.userEmail!='none' ) {
 
   //Send feedback to TA service to understand tone
     var userUtterance = {
       "utterances": [
         {
-        "text": feedbackText,
+        "text": response.context.feedbackText,
         "user": "customer"
         }
       ]
     }
 
   //Call the TA service passing user utterance object and callback function
-    toneAnalyzer.tone_chat(userUtterance, (err, response) => {
-      if (err) {
-        console.log(`Call to Tone Analyser failed with error ${err}`)
-        return(err);
-      }
+  // toneAnalyzer.tone_chat(userUtterance, (err, response) => {
+  //   if (err) {
+  //     console.log(`Call to Tone Analyser failed with error ${err}`)
+  //     return(err);
+  //     }
+  //
+  //     //Loop round array of tones returned selecting the one with highest score
+  //     //as the dominant tone
+  //     var maxScore = 0.0;
+  //     var dominantTone = {
+  //       "score":0,
+  //       "tone_id":null,
+  //       "tone_name":null
+  //     };
+  //     response.utterances_tone[0].tones.forEach(function(tone) {
+  //       //console.log(`Tone info1 = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
+  //       if (tone.score > maxScore) {
+  //         dominantTone = tone;
+  //       }
+  //     });
+  //     return dominantTone
+  //   });
 
-      //Loop round array of tones returned selecting the one with highest score
-      //as the dominant tone
-      var maxScore = 0.0;
-      var dominantTone = {
-        "score":0,
-        "tone_id":"neutral",
-        "tone_name":"neutral"
-      };
-      response.utterances_tone[0].tones.forEach(function(tone) {
-        //console.log(`Tone info1 = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
-        if (tone.score > maxScore) {
-          dominantTone = tone;
-        }
-      });
 
-      console.log(`Tone of feedback=${JSON.stringify(dominantTone, null, 2)}`);
 
-     //Write feedback details to database
-      console.log('Saving feedback to database...');
-      console.log(`User feedback = ${feedbackText}`);
-      console.log(`User feedback email = ${userEmail}`);
-      console.log(`User feedback tone = ${dominantTone.tone_name}`);
-      //console.log(`Tone of feedback=${JSON.stringify(dominantTone, null, 2)}`);}
-    });
+    console.log('Saving feedback to database...');
+    console.log(`User feedback = ${response.context.feedbackText}`);
+    console.log(`User feedback email = ${response.context.userEmail}`);
+    //console.log(`Tone of feedback=${JSON.stringify(dominantTone, null, 2)}`);
 
-    //Reset context feedback variables
+    //Reset context variables
     response.context.feedbackText ="none";
     response.context.userEmail ="none";
-    response.context.feedback="0"
   }
   return;
 }
@@ -295,13 +282,7 @@ function updateMessage(input, response) {
   //    not confident. List these in an array for checking. Check if the node
   //    that has just spoken is in the list. If so return its utterance without
   //    over-riding
-  var confidenceCheckExceptionDialogues = [
-    'Negative Emotion',
-    'Capture User Feedback and ask for email address',
-    'Capture email address  then ask if ending conversation'
-  ];
-
-    // if (response.output.nodes_visited[0]=='Negative Emo];
+  var confidenceCheckExceptionDialogues = ['Negative Emotion','Capture User Feedback and ask for email address'];
 
   // if (response.output.nodes_visited[0]=='Negative Emotion') {
   //   //console.log('Negative emotion encountered');
