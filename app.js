@@ -24,9 +24,16 @@ const ToneAnalyzerV3 = require('watson-developer-cloud/tone-analyzer/v3'); // wa
 
 var app = express();//New express app
 
-// Bootstrap application settings
-app.use(express.static('./public')); // load UI from public folder
+// load UI from public folder if GET request to root
+app.use('/',express.static('./public'));
+// load debug UI from debug folder if GET request to /debug
+app.use('/debug',express.static('./debug'));
+
 app.use(bodyParser.json());
+
+// app.use(express.static('./public')); // load UI from public folder
+// app.use(bodyParser.json());
+
 
 // Create the service wrapper for Tone Analyser
 // If unspecified here, the TONE_ANALYZER_USERNAME and TONE_ANALYZER__PASSWORD env properties
@@ -84,6 +91,37 @@ app.post('/api/message', function(req, res) {
     });
   }
 
+  //Retrieve tone confidence thresholdS from environment file - use 0.5 if not defined
+  var toneThreshold_excited = process.env.TONE_CONFIDENCE_THRESHOLD_EXCITED|| 0.75;
+  if (toneThreshold_excited == '<tone-confidence-threshold-excited>') {
+    toneThreshold_excited = 0.75;
+  }
+  var toneThreshold_frustrated = process.env.TONE_CONFIDENCE_THRESHOLD_FRUSTRATED|| 0.75;
+  if (toneThreshold_frustrated == '<tone-confidence-threshold-frustrated>') {
+    toneThreshold_frustrated = 0.75;
+  }
+  var toneThreshold_impolite = process.env.TONE_CONFIDENCE_THRESHOLD_IMPOLITE|| 0.75;
+  if (toneThreshold_impolite == '<tone-confidence-threshold-impolite>') {
+    toneThreshold_impolite = 0.75;
+  }
+  var toneThreshold_polite = process.env.TONE_CONFIDENCE_THRESHOLD_POLITE|| 0.75;
+  if (toneThreshold_polite == '<tone-confidence-threshold-polite>') {
+    toneThreshold_polite = 0.75;
+  }
+  var toneThreshold_sad = process.env.TONE_CONFIDENCE_THRESHOLD_SAD|| 0.75;
+  if (toneThreshold_sad == '<tone-confidence-threshold-sad>') {
+    toneThreshold_sad = 0.75;
+  }
+  var toneThreshold_satisfied = process.env.TONE_CONFIDENCE_THRESHOLD_SATISFIED|| 0.75;
+  if (toneThreshold_satisfied == '<tone-confidence-threshold-satisfied>') {
+    toneThreshold_satisfied = 0.75;
+  }
+  var toneThreshold_sympathetic = process.env.TONE_CONFIDENCE_THRESHOLD_SYMPATHETIC|| 0.75;
+  if (toneThreshold_sympathetic == '<tone-confidence-threshold-sympathetic>') {
+    toneThreshold_sympathetic = 0.75;
+  }
+
+
   //Determine client type from message received on POST (FUTURE DEV)
   //var clientType = req.body.context.clientType;
 
@@ -138,24 +176,48 @@ app.post('/api/message', function(req, res) {
 
       //Loop round array of tones returned selecting the one with highest score
       //as the dominant tone
-      var maxScore = 0.0;
+      var bestScore = 0.0;
       var dominantTone = {
         "score":0,
         "tone_id":null,
         "tone_name":null
       };
+      // console.log('Tone thresholds');
+      //console.log('exceptited',toneThreshold_excited);
+      // console.log('Frustrated',toneThreshold_frustrated);
+      // console.log('Impolite',toneThreshold_impolite);
+      // console.log('Polite',toneThreshold_polite);
+      // console.log('Sad',toneThreshold_sad);
+      // console.log('Satisfied',toneThreshold_satisfied);
+      // console.log('Sympathetic',toneThreshold_sympathetic);
       response.utterances_tone[0].tones.forEach(function(tone) {
-        //console.log(`Tone info1 = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
-        if (tone.score > maxScore) {
-          dominantTone = tone;
-          //console.log(`New domimant tone ${JSON.stringify(tone, null, 2)}`);
+      //console.log(`Tone info1 = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
+
+        //Only consider a tone if it is above its defined threshold
+        if ((tone.tone_id=='excited' && tone.score>toneThreshold_excited) ||
+           (tone.tone_id=='frustrated' && tone.score>toneThreshold_frustrated) ||
+           (tone.tone_id=='impolite' && tone.score>toneThreshold_impolite) ||
+           (tone.tone_id=='polite' && tone.score>toneThreshold_polite) ||
+           (tone.tone_id=='sad' && tone.score>toneThreshold_sad) ||
+           (tone.tone_id=='satisfied' && tone.score>toneThreshold_satisfied) ||
+           (tone.tone_id=='sympathetic' && tone.score>toneThreshold_sympathetic)) {
+
+        //If tone score highest so far make it dominant tone
+            //  console.log(`Tone passed its threshold test = ${tone.score} ${tone.tone_id} ${tone.tone_name}`);
+             if (tone.score > bestScore) {
+              //  console.log(`New dominant tone ${tone.tone_id}`);
+               dominantTone = tone;
+              //  console.log(`New dominant tone ${JSON.stringify(dominantTone, null, 2)}`);
+              //console.log(`New domimant tone ${JSON.stringify(tone, null, 2)}`);
+             }
         }
       });
 
       //Insert dominant tone into the conversation context object
-      if (dominantTone) {
-        req.body.context.dominantTone=dominantTone;
-      }
+      req.body.context.dominantTone=dominantTone;
+      // if (dominantTone) {
+      //   req.body.context.dominantTone=dominantTone;
+      // }
 
       //console.log(`Context object from PREVIOUS conversation round now updated to inlcude Tone of user's latest utterance = ${JSON.stringify(req.body.context, null, 2)}`);
 
@@ -183,7 +245,7 @@ app.post('/api/message', function(req, res) {
           return res.status(err.code || 500).json(err);
         }
 
-        //console.log(`Context object from LATEST conversation round = ${JSON.stringify(data, null, 2)}`);
+        console.log(`Context object from LATEST conversation round = ${JSON.stringify(data, null, 2)}`);
 
       //Record user feedback to database (doesn't matter that this executes asynch - not dependent on it to pass message back)
         recordFeedback(data);
@@ -297,6 +359,7 @@ function updateMessage(input, response) {
   //    over-riding
   var confidenceCheckExceptionDialogues = [
     'Negative Emotion',
+    'PositiveEmotion',
     'Capture User Feedback and ask for email address',
     'Capture email address  then ask if ending conversation'
   ];
