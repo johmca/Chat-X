@@ -164,12 +164,27 @@ var ConversationPanel = (function() {
     var messageArray = [];
 
     //jm01 - Chunk up into different elements of textArray here and it should work
-    // var textArray2 = [];
-    // textArray2[0]=textArray[0];
-    // textArray2[1]='***fooled ya gain***'
+    if (isUser!==true) {
+      var textArray2 = [];
+      textArray.forEach((currentText)=>{
+        //Split currenText string into array based on finding <pause> isntructions
+        var currentTextSplits = currentText.split('<pause>')
+        currentTextSplits.forEach(function(splitText){
+          textArray2.push(splitText);
+        })
+      console.log('Printing textArray2.....')
+      for (i=0; i < textArray2.length;i++) {
+        console.log(`Prining textArray2[${i}]=${textArray2[i]}`);
+        }
+      })
+    } else {
+      textArray2 = textArray.slice(0);
+    }
 
-    textArray.forEach(function(currentText) {
+//jm01 Output individual texts to screen
+    textArray2.forEach(setTimeout(function(currentText) {
       //console.log('*****currentText=',currentText) //jm01
+
       if (currentText) {
         var messageJson = {
           // <div class='segments'>
@@ -193,7 +208,7 @@ var ConversationPanel = (function() {
         };
         messageArray.push(Common.buildDomElement(messageJson));
       }
-    });
+    },1000));
 
     return messageArray;
   }

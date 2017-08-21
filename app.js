@@ -388,7 +388,12 @@ function updateMessage(input, response) {
     return response;
   }
 
-  var textFromConversation = response.output.text;
+  //Each node fired adds an element containing its own text output to the
+  // output.text array seperated by a comma. Concatenate the elements without
+  //any separator to send back to the client.
+  //var textFromConversation = response.output.text;
+  var textFromConversation = response.output.text.join(' ');
+
   var additionalText='';
   if (response.intents && response.intents[0]) {
     var intent = response.intents[0];

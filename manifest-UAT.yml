@@ -4,13 +4,13 @@ declared-services:
     label: conversation
     plan: free
 applications:
-- name: ICAEW-chatplatform-DEV
+- name: ICAEW-chatplatform-UAT
   command: npm start
   path: .
   memory: 256M
   instances: 1
   services:
-  - Conversation-ICAEW-DEV
-  - Tone Analyzer-ICAEW-DEV
+  - Conversation-ICAEW-UAT
+  - Tone Analyzer-ICAEW-UAT
   env:
     NPM_CONFIG_PRODUCTION: false
