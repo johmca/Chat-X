@@ -114,7 +114,6 @@ var ConversationPanel = (function() {
 
   // Display a user or Watson message that has just been sent/received
   function displayMessage(newPayload, typeValue) {
-    //print('***Got Here ***') //jm01
 
     var isUser = isUserMessage(typeValue);
     var textExists = (newPayload.input && newPayload.input.text)
@@ -133,13 +132,39 @@ var ConversationPanel = (function() {
         });
       }
 
+      var i = 0;//jm01a - set div counter
       messageDivs.forEach(function(currentDiv) {
-        chatBoxElement.appendChild(currentDiv);
-        // Class to start fade in animation
-        currentDiv.classList.add('load');
+        //jm01 - Delayed chatbot utterances by a set number of ms
+        //to give user time to read and digest. First utternace will not be delayed
+
+        //jm01 - start
+        //Deleted the following lines------------
+        // -----chatBoxElement.appendChild(currentDiv);
+        // -----// Class to start fade in animation
+        // -----currentDiv.classList.add('load');
+
+        //Added the following code
+        //Execute repeated setTimeouts. Note setTimeout is one of the few
+        //asycnhronous client side JS functions which means to queue these
+        //up to run with a delay between them I need to multiply the time delaying
+        //by an incremental factor each time
+        setTimeout(function() {
+          console.log('delaying...');
+          chatBoxElement.appendChild(currentDiv);
+          // Class to start fade in animation
+          currentDiv.classList.add('load');
+          // Move chat to the most recent messages when new messages are added
+          scrollToChatBottom();
+          // console.log(`printed currentDiv=${i} with 4s delay`);
+          // console.log(currentDiv);
+        },5000*i); //3s delay
+        // }
+         i = i +1;
+        //jm01 - end
+
       });
       // Move chat to the most recent messages when new messages are added
-      scrollToChatBottom();
+      //scrollToChatBottom();
     }
   }
 
@@ -163,13 +188,35 @@ var ConversationPanel = (function() {
     }
     var messageArray = [];
 
-    //jm01 - Chunk up into different elements of textArray here and it should work
-    // var textArray2 = [];
-    // textArray2[0]=textArray[0];
-    // textArray2[1]='***fooled ya gain***'
+    //jm01 - This code scans the response from the bot for the <pause> tag
+    // and creates splits in the text based on these. textArray2 is loaded
+    // with the newly formatted text for output to screen
 
-    textArray.forEach(function(currentText) {
-      //console.log('*****currentText=',currentText) //jm01
+    if (isUser!==true) {//If chatbot utterance remove commas between utterances and chunk up if <pause> tag
+      //Initialise empty array 3 to hold final split of text
+      var textArray3 = [];
+      //Initialise array 2 to be concatentaiton of original ttxt array
+      //elements without the comma seperators between elements
+      //console.log('textArray=',textArray);
+      var textArray2 = textArray.slice(0);
+      //console.log('textArray2=',textArray2);
+      // Loop round elements of textArray2 (there should only be 1)
+      textArray2.forEach((currentText)=>{
+
+        //Split currentText string into array based on finding <pause> intructions
+        var text2Splits = currentText.split('<pause>');
+        //console.log('text2Splits=',text2Splits);
+        text2Splits.forEach(function(splitText){
+          textArray3.push(splitText);
+        })
+      })
+    } else { //if user utterenance then set textArray3 as an exact copy of original
+      textArray3 = textArray.slice(0);
+    }
+
+    // textArray.forEach(function(currentText) {
+    textArray3.forEach(function(currentText) {
+
       if (currentText) {
         var messageJson = {
           // <div class='segments'>
